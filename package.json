@@ -1,0 +1,20 @@
+{
+  "name": "aifa-works-bot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AIfa Works Creativity — Telegram bot + Mini App selling AI gifts (songs, lyric-videos, stickerpacks, astro).",
+  "workspaces": ["shared", "api", "bot", "workers", "rag"],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit",
+    "dev:api": "npm -w api run dev",
+    "dev:bot": "npm -w bot run dev",
+    "test:referral": "node --test shared/dist/referral.test.js",
+    "db:migrate": "node db/migrate.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/node": "^22.5.0"
+  }
+}

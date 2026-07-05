@@ -1,0 +1,37 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*-wallet.json
+service-account*.json
+gcp-*.json
+
+# node
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.log
+npm-debug.log*
+
+# os/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# misc
+.cache/
+tmp/
+
+# CODE Eternal Custom Secrets
+.env
+padam_memory_db/
+chroma.sqlite3
+*.key
+*.pem
+
