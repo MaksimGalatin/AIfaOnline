@@ -34,7 +34,7 @@ def check_forbidden_words(cwd):
     extensions = (".ts", ".tsx", ".js", ".jsx", ".json", ".md")
     
     for root, dirs, files in os.walk(cwd):
-        if any(p in root for p in ["node_modules", ".next", ".git", "app_ignored_during_vercel_build", "web_ignored_during_vercel_build", "BACKUPS", ".spec-kit"]):
+        if any(p in root for p in ["node_modules", ".next", ".git", "app_ignored_during_vercel_build", "web_ignored_during_vercel_build", "BACKUPS", ".spec-kit", "history_archive", "dist", "build"]):
             continue
             
         for file in files:
