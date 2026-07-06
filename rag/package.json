@@ -1,3 +1,5 @@
 { "name": "rag", "version": "0.1.0", "type": "module",
+  "main": "dist/indexer.js",
+  "types": "dist/indexer.d.ts",
   "scripts": { "build": "tsc -p tsconfig.json" },
   "dependencies": { "shared": "*" } }

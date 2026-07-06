@@ -9,5 +9,6 @@
   "dependencies": {
     "shared": "*"
   },
-  "main": "dist/worker.js"
+  "main": "dist/worker.js",
+  "types": "dist/worker.d.ts"
 }

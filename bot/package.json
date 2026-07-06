@@ -9,7 +9,9 @@
   },
   "dependencies": {
     "grammy": "^1.30.0",
-    "shared": "*"
+    "shared": "*",
+    "rag": "*"
   },
-  "main": "dist/bot.js"
+  "main": "dist/bot.js",
+  "types": "dist/bot.d.ts"
 }

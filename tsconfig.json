@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "shared" },
+    { "path": "rag" },
+    { "path": "api" },
+    { "path": "bot" },
+    { "path": "workers" }
+  ]
+}

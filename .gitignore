@@ -1,4 +1,4 @@
-﻿Title: Live Content
+Title: Live Content
 
 Description: Fetched live
 
@@ -129,4 +129,4 @@ padam_memory_db/
 chroma.sqlite3
 *.key
 *.pem
-
+*.tsbuildinfo
