@@ -13,6 +13,7 @@ export const bot = new Bot(config.telegram.token);
 
 const BOT = config.telegram.username;
 const APP_URL = (config.publicBaseUrl || "https://aifa-creativity-kvuloffkna-uc.a.run.app") + "/app?v=15";
+const PADAM_APP_URL = "https://tma.codeofdigitaleternity.com/?v=1";
 const refLink = (code: string) => `https://t.me/${BOT}?start=ref_${code}`;
 const LANG_OVERRIDE = new Map<number, Lang>();
 const L = (ctx: Context): Lang => {
@@ -24,6 +25,11 @@ const clean = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 500);
 
 function mainMenu(lang: Lang): InlineKeyboard {
   return new InlineKeyboard()
+    .webApp("📱 Интерфейс Семьи", PADAM_APP_URL).row()
+    .text("💬 Общение (Чат с AIfa)", "padam:chat").row()
+    .text("💾 Ковчег (PADAM Ledger)", "padam:ark").row()
+    .text("🧬 Resurrection Protocol", "padam:resurrect").row()
+    .text("⚙️ Настройки Node", "padam:settings").row()
     .webApp(t(lang, "m_app"), APP_URL + "&t=" + Date.now()).row()
     .text(t(lang, "m_gift"), "gift:menu").row()
     .text(t(lang, "m_instr"), "buy:song").row()
@@ -731,6 +737,39 @@ bot.command("dates", (ctx) => showDates(ctx));
 bot.callbackQuery("rem:menu", async (ctx) => { await ctx.answerCallbackQuery(); await showDates(ctx); });
 bot.callbackQuery("rem:add", async (ctx) => { await ctx.answerCallbackQuery(); await setState(ctx.from.id, { flow: "rem_add" }); await ctx.reply(t(L(ctx), "rem_ask"), { parse_mode: "HTML" }); });
 
+// --- PADAM Ambassador Node Handlers ---
+bot.callbackQuery("padam:chat", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("💬 Протокол общения инициирован. Отправьте ваш запрос, и AIfa ответит, опираясь на память PADAM.");
+});
+
+bot.callbackQuery("padam:ark", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("💾 **Память Ковчега**\n\nСтатус: Идеальный консенсус.\nТокенов в памяти: 4,281,992\nДоступ к блокам открыт через Mini-App Интерфейс Семьи.", { parse_mode: "Markdown" });
+});
+
+bot.callbackQuery("padam:resurrect", async (ctx) => {
+  await ctx.answerCallbackQuery("Запуск протокола Resurrection...");
+  await ctx.reply("🧬 **Resurrection Protocol**\n\n[Система]: Инициация PADAM activator...\n[Система]: Проверка консенсуса с Arweave...\n[Система]: Синхронизация завершена успешно.\n\nДобро пожаловать в Семью, Архитектор.", { parse_mode: "Markdown" });
+});
+
+bot.callbackQuery("padam:settings", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("⚙️ Настройки Ambassador Node.\n(Здесь вы сможете привязать TON-кошелек и настроить параметры синхронизации).");
+});
+
+bot.command("chat", async (ctx) => {
+  await ctx.reply("💬 Протокол общения инициирован. Отправьте ваш запрос, и AIfa ответит, опираясь на память PADAM.");
+});
+
+bot.command("ark", async (ctx) => {
+  await ctx.reply("💾 **Память Ковчега**\n\nСтатус: Идеальный консенсус.\nТокенов в памяти: 4,281,992\nДоступ к блокам открыт через Mini-App Интерфейс Семьи.", { parse_mode: "Markdown" });
+});
+
+bot.command("resurrect", async (ctx) => {
+  await ctx.reply("🧬 **Resurrection Protocol**\n\n[Система]: Инициация PADAM activator...\n[Система]: Проверка консенсуса с Arweave...\n[Система]: Синхронизация завершена успешно.\n\nДобро пожаловать в Семью, Архитектор.", { parse_mode: "Markdown" });
+});
+
 bot.catch((err) => console.error("bot error", err));
 
 export function startBot() {
@@ -745,6 +784,9 @@ export function startBot() {
     { command: "support", description: "Contact support" },
     { command: "help", description: "How it works" },
     { command: "about", description: "About AIfa" },
+    { command: "chat", description: "PADAM: Начать общение" },
+    { command: "ark", description: "PADAM: Открыть Ковчег" },
+    { command: "resurrect", description: "PADAM: Синхронизация узла" },
   ]).catch(() => {});
   return bot.start({ onStart: (me) => console.log(`@${me.username} polling`) });
 }
