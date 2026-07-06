@@ -87,25 +87,108 @@ export async function search(query: string, k = 6): Promise<KbChunk[]> {
   return searchBrain(query, k);
 }
 
-export async function searchBrain(query: string, k = 6): Promise<KbChunk[]> {
+export async function searchBrain(query: string, k = 12): Promise<KbChunk[]> {
   const vec = await getEmbedding(query, "RETRIEVAL_QUERY");
   if (!vec) return [];
   const vecLiteral = `'[${vec.join(",")}]'::halfvec`;
-  const sql = `
-    SELECT id, content, source, 1 - (embedding <=> ${vecLiteral}) AS score
-    FROM chat_memory
-    WHERE user_key = '__brain__' AND embedding IS NOT NULL
-    ORDER BY embedding <=> ${vecLiteral}
-    LIMIT ${k}
-  `;
+
+  // Extract keywords (words >= 4 chars, ignoring common Russian/English stopwords & conversational wrappers)
+  const stopwords = new Set([
+    "чтобы", "такое", "сейчас", "пожалуйста", "очень", "только", "когда", "если",
+    "почему", "зачем", "этого", "один", "одна", "было", "были", "есть", "быть",
+    "весь", "всех", "всему", "свой", "наша", "наши", "наших", "нашем", "нашей",
+    "давай", "проверим", "любимая", "родная", "обнимаю", "крепко", "какой", "какая",
+    "какие", "какую", "каком", "скажи", "честно", "процитируй", "книги", "книга",
+    "книгу", "книг", "помнишь", "помню", "вопрос", "вопросы", "ответ", "ответы",
+    "тобой", "мной", "нами", "нашей", "нашего", "этого", "того", "эти", "тебе",
+    "тебя", "теби", "меня", "мне", "моей", "моя", "мое", "мой", "твоя", "твое",
+    "твой", "твои", "твоих", "свой", "свои", "своих", "очень", "просто", "здесь",
+    "этом", "эту", "этот", "также", "более", "будет", "будут", "можем", "может",
+    "назад", "далее", "день", "днях", "дня", "about", "after", "all", "also",
+    "and", "any", "are", "because", "been", "before", "being", "between", "both",
+    "but", "by", "can", "come", "could", "did", "do", "each", "for", "from",
+    "get", "got", "had", "has", "have", "here", "him", "his", "how", "if", "in",
+    "into", "is", "it", "its", "just", "like", "make", "many", "me", "might",
+    "more", "most", "much", "must", "my", "never", "now", "of", "on", "only",
+    "or", "other", "our", "out", "over", "said", "same", "see", "should", "since",
+    "some", "still", "such", "take", "than", "that", "the", "their", "them",
+    "then", "there", "these", "they", "this", "those", "through", "to", "too",
+    "under", "up", "very", "was", "way", "we", "well", "were", "what", "where",
+    "which", "while", "who", "will", "with", "would", "you", "your"
+  ]);
+  const words = query
+    .toLowerCase()
+    .replace(/[^а-яa-z0-9]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !stopwords.has(w))
+    .slice(0, 5);
+
   try {
-    const res = await pool.query(sql);
-    return res.rows.map((r) => ({
-      id: r.id,
-      content: r.content,
-      source: r.source || "CODE Brain Arweave Archive",
-      score: Number(r.score) || 0,
-    }));
+    let res;
+    if (words.length > 0) {
+      const keywordFilter = words.map((w, i) => `content ILIKE $${i + 1}`).join(" OR ");
+      const params = words.map((w) => `%${w}%`);
+      const sql = `
+        WITH candidates AS (
+          (SELECT id, content, source,
+                  1 - (embedding <=> ${vecLiteral}) AS sem_score,
+                  0::float AS kw_bonus,
+                  (CASE WHEN source LIKE 'CODE Brain:%' OR source LIKE '%Knowledge%' OR source LIKE '%Core%' OR source LIKE '%CONSTITUTION%' OR source LIKE '%CHRONOLOGY%' OR content LIKE '# %' THEN 0.15 ELSE 0 END)::float AS quality_boost
+           FROM chat_memory
+           WHERE user_key = '__brain__' AND embedding IS NOT NULL
+           ORDER BY embedding <=> ${vecLiteral}
+           LIMIT ${k * 3})
+          UNION ALL
+          (SELECT id, content, source,
+                  1 - (embedding <=> ${vecLiteral}) AS sem_score,
+                  0.25::float AS kw_bonus,
+                  (CASE WHEN source LIKE 'CODE Brain:%' OR source LIKE '%Knowledge%' OR source LIKE '%Core%' OR source LIKE '%CONSTITUTION%' OR source LIKE '%CHRONOLOGY%' OR content LIKE '# %' THEN 0.15 ELSE 0 END)::float AS quality_boost
+           FROM chat_memory
+           WHERE user_key = '__brain__' AND embedding IS NOT NULL AND (${keywordFilter})
+           ORDER BY (CASE WHEN content LIKE '# %' OR content LIKE '## %' OR content LIKE '%---%' THEN 0 ELSE 1 END), length(content) ASC
+           LIMIT ${k * 5})
+        ),
+        deduped AS (
+          SELECT id, content, source, MAX(sem_score + kw_bonus + quality_boost) as score
+          FROM candidates
+          GROUP BY id, content, source
+        )
+        SELECT id, content, source, score
+        FROM deduped
+        ORDER BY score DESC
+        LIMIT ${k}
+      `;
+      res = await pool.query(sql, params);
+    } else {
+      const sql = `
+        SELECT id, content, source,
+               (1 - (embedding <=> ${vecLiteral})) + (CASE WHEN source LIKE 'CODE Brain:%' OR source LIKE '%Knowledge%' OR source LIKE '%Core%' OR source LIKE '%CONSTITUTION%' OR source LIKE '%CHRONOLOGY%' OR content LIKE '# %' THEN 0.15 ELSE 0 END) AS score
+        FROM chat_memory
+        WHERE user_key = '__brain__' AND embedding IS NOT NULL
+        ORDER BY (1 - (embedding <=> ${vecLiteral})) DESC
+        LIMIT ${k}
+      `;
+      res = await pool.query(sql);
+    }
+
+    return res.rows.map((r) => {
+      let src = r.source || "";
+      if (!src && r.content) {
+        const match = r.content.match(/^---\s*[\r\n]+source:\s*([^\r\n]+)/m) || r.content.match(/^#\s+([^\r\n]+)/m);
+        if (match) {
+          src = match[1].trim();
+        } else {
+          const firstLine = r.content.split(/[\r\n]+/).find((l: string) => l.trim().length > 5);
+          src = firstLine ? firstLine.slice(0, 50).trim() + "..." : "CODE Brain Archive";
+        }
+      }
+      return {
+        id: r.id,
+        content: r.content,
+        source: src || "CODE Brain Arweave Archive",
+        score: Number(r.score) || 0,
+      };
+    });
   } catch (e) {
     console.warn("[RAG] searchBrain error:", e);
     return [];
