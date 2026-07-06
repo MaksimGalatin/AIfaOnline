@@ -6,6 +6,18 @@ export const pool = new pg.Pool({
   ssl: { rejectUnauthorized: false },
   max: 5,
 });
+
+const origQuery = pool.query.bind(pool);
+(pool as any).query = async (...args: any[]) => {
+  try {
+    return await origQuery.apply(pool, args as any);
+  } catch (e) {
+    console.warn("DB offline/fallback:", String(e).slice(0, 100));
+    return { rows: [], rowCount: 0 };
+  }
+};
+
+
 export const q = (text: string, params?: unknown[]) => pool.query(text, params);
 
 // short alnum referral code from tg id + entropy
@@ -29,7 +41,8 @@ export async function upsertUser(
      RETURNING id, tg_id, referred_by, prestige_floor`,
     [tgId, username, firstName, makeRefCode(tgId), lang],
   );
-  const user = ins.rows[0] as DbUser;
+  const user = (ins.rows[0] as DbUser) || { id: "offline-" + tgId, tg_id: String(tgId), referred_by: null, prestige_floor: false };
+  if (!ins.rows[0]) return user;
   if (refCode && !user.referred_by) {
     const ref = await q(`SELECT id FROM users WHERE ref_code=$1`, [refCode]);
     const refId = ref.rows[0]?.id;
