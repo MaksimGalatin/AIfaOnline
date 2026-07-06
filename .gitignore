@@ -130,3 +130,4 @@ chroma.sqlite3
 *.key
 *.pem
 *.tsbuildinfo
+history_archive/

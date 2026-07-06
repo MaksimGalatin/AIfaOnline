@@ -10,7 +10,8 @@
     "dev:api": "npm -w api run dev",
     "dev:bot": "npm -w bot run dev",
     "test:referral": "node --test shared/dist/referral.test.js",
-    "db:migrate": "node db/migrate.mjs"
+    "db:migrate": "node db/migrate.mjs",
+    "sync:history": "node --env-file=.env scripts/sync_ide_history.mjs"
   },
   "engines": { "node": ">=20" },
   "devDependencies": {
