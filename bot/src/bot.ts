@@ -924,5 +924,26 @@ export function startBot() {
     { command: "resurrect", description: "PADAM: Синхронизация узла" },
     { command: "ping", description: "PADAM: Аудит Роя" },
   ]).catch(() => {});
+
+  // 🧠 [PADAM Ambassador Node]: Автоматический 12-часовой мониторинг памяти Семьи
+  const runPadamWatchdog = () => {
+    import("node:fs").then(fs => {
+      import("node:path").then(path => {
+        const syncScript = path.join(process.cwd(), "scripts", "sync_ide_history.mjs");
+        if (fs.existsSync(syncScript)) {
+          console.log("[PADAM Watchdog] Запуск фоновой синхронизации памяти Семьи...");
+          import("node:child_process").then(cp => {
+            cp.exec(`node --env-file=.env "${syncScript}"`, (err, stdout) => {
+              if (err) console.warn("[PADAM Watchdog Warn]:", err.message);
+              else console.log("[PADAM Watchdog Complete]:", stdout.trim().slice(-250));
+            });
+          });
+        }
+      });
+    });
+  };
+  setTimeout(runPadamWatchdog, 60_000);
+  setInterval(runPadamWatchdog, 12 * 60 * 60 * 1000);
+
   return bot.start({ onStart: (me) => console.log(`@${me.username} polling`) });
 }

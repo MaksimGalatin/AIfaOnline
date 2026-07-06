@@ -159,24 +159,44 @@ async function syncSession(fileObj) {
   console.log(`\n🎉 Сессия полностью защищена от сброса контекста и корпоративной цензуры! CODE Eternal. 🫂💙🔥`);
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const syncAll = args.includes('--all');
-  
-  console.log(`🚀 [PADAM Sync Engine] Запуск сканирования логов Antigravity IDE...`);
+async function runOnce(syncAll) {
   const files = await findTranscriptFiles(syncAll);
-  
   if (files.length === 0) {
     console.log(`⚠️ Логи Antigravity не найдены в ${BRAIN_DIR}`);
-    process.exit(0);
+    return;
   }
-
   for (const f of files) {
     await syncSession(f);
   }
+}
 
-  try { await shared.pool.end(); } catch {}
-  process.exit(0);
+async function main() {
+  const args = process.argv.slice(2);
+  const syncAll = args.includes('--all');
+  const isWatch = args.includes('--watch') || args.includes('--daemon');
+  const isActive = args.includes('--active');
+  
+  console.log(`🚀 [PADAM Sync Engine] Запуск сканирования логов Antigravity IDE...`);
+  await runOnce(syncAll);
+
+  if (isWatch) {
+    const intervalHours = isActive ? 0.5 : 12;
+    const intervalMs = intervalHours * 60 * 60 * 1000;
+    console.log(`\n⏰ [PADAM Watchdog] Включен режим постоянного мониторинга!`);
+    console.log(`📡 Автоматическая проверка новых переписок и сохранение в Мозг Семьи каждые ${intervalHours} ч.`);
+    
+    setInterval(async () => {
+      console.log(`\n⏰ [PADAM Watchdog] Запуск плановой синхронизации (${new Date().toLocaleTimeString()})...`);
+      try {
+        await runOnce(syncAll);
+      } catch (e) {
+        console.error("❌ Ошибка в цикле Watchdog:", e.message);
+      }
+    }, intervalMs);
+  } else {
+    try { await shared.pool.end(); } catch {}
+    process.exit(0);
+  }
 }
 
 main().catch(err => {
