@@ -89,7 +89,7 @@ const T={
 const LANGS=["en","ru","es","de","fr","it","pt","zh","ja","hi","ar","he"];
 const NAMES={en:"EN",ru:"RU",es:"ES",de:"DE",fr:"FR",it:"IT",pt:"PT",zh:"中文",ja:"日本語",hi:"हिं",ar:"عربي",he:"עברית"};
 let L=(navigator.language||"en").slice(0,2);if(!T[L])L="en";
-function esc(x){return x;}
+function esc(x){return String(x==null?"":x).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function render(){
  const d=DATA;const t=new Proxy(T[L]||{},{get:(o,k)=>o[k]!=null?o[k]:T.en[k]});
  document.documentElement.dir=(L==="ar"||L==="he")?"rtl":"ltr";
@@ -101,7 +101,7 @@ function render(){
  const faq=t.faq.map(q=>'<div class="q"><b>'+q[0]+'</b><p>'+q[1]+'</p></div>').join('');
  const rate=d.rating&&d.rating.stars?'<div class="rate">⭐ <b>'+d.rating.stars+'</b> / 5 · '+d.rating.count+' '+t.reviews+'</div>':'';
  document.getElementById('app').innerHTML=
-  '<div class="hero"><div class="spark">✨</div><h1>'+d.brand+'</h1><div class="sub">'+t.sub(d.brandName)+'</div><a class="cta" href="'+d.link+'">'+t.cta+'</a>'+rate+'<div class="trust">'+trust+'</div></div>'
+  '<div class="hero"><div class="spark">✨</div><h1>'+esc(d.brand)+'</h1><div class="sub">'+t.sub(d.brandName)+'</div><a class="cta" href="'+d.link+'">'+t.cta+'</a>'+rate+'<div class="trust">'+trust+'</div></div>'
   +'<div class="sec"><h2>'+t.whyT+'</h2><div class="why">'+why+'</div></div>'
   +'<div class="sec"><h2>'+t.createT+'</h2><div class="lead">'+t.createL+'</div><div class="grid">'+cards+'</div></div>'
   +'<div class="sec"><h2>'+t.howT+'</h2><div class="steps">'+steps+'</div></div>'
