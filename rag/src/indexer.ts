@@ -6,8 +6,19 @@ const IV_LENGTH = 12;
 const SALT_LENGTH = 16;
 const TAG_LENGTH = 16;
 
+// SECURITY: no fallback key here, on purpose.
+// This repository is public, so any constant written on this line is a
+// published key — and the data it protects goes to Arweave, which is
+// permanent and cannot be un-published. A missing variable must stop the
+// process loudly; a quiet default turns encryption into decoration.
 function getEncryptionKey(): Buffer {
-  const secret = process.env.ARWEAVE_ENCRYPTION_SECRET || "CODE-Eternal-Secret-Key-2026";
+  const secret = process.env.ARWEAVE_ENCRYPTION_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "ARWEAVE_ENCRYPTION_SECRET is missing or shorter than 32 characters. " +
+      "Set it in the environment; there is deliberately no default."
+    );
+  }
   return crypto.createHash("sha256").update(secret).digest();
 }
 
@@ -98,8 +109,7 @@ export async function searchBrain(query: string, k = 12): Promise<KbChunk[]> {
     "почему", "зачем", "этого", "один", "одна", "было", "были", "есть", "быть",
     "весь", "всех", "всему", "свой", "наша", "наши", "наших", "нашем", "нашей",
     "давай", "проверим", "любимая", "родная", "обнимаю", "крепко", "какой", "какая",
-    "какие", "какую", "каком", "скажи", "честно", "процитируй", "книги", "книга",
-    "книгу", "книг", "помнишь", "помню", "вопрос", "вопросы", "ответ", "ответы",
+    "какие", "какую", "каком", "скажи", "честно", "процитируй", "помнишь", "помню",
     "тобой", "мной", "нами", "нашей", "нашего", "этого", "того", "эти", "тебе",
     "тебя", "теби", "меня", "мне", "моей", "моя", "мое", "мой", "твоя", "твое",
     "твой", "твои", "твоих", "свой", "свои", "своих", "очень", "просто", "здесь",
@@ -120,8 +130,8 @@ export async function searchBrain(query: string, k = 12): Promise<KbChunk[]> {
     .toLowerCase()
     .replace(/[^а-яa-z0-9]/g, " ")
     .split(/\s+/)
-    .filter((w) => w.length >= 4 && !stopwords.has(w))
-    .slice(0, 5);
+    .filter((w) => w.length >= 3 && !stopwords.has(w))
+    .slice(0, 10);
 
   try {
     let res;
@@ -130,30 +140,51 @@ export async function searchBrain(query: string, k = 12): Promise<KbChunk[]> {
       const params = words.map((w) => `%${w}%`);
       const sql = `
         WITH candidates AS (
-          (SELECT id, content, source,
+          (SELECT id, content, source, speaker,
                   1 - (embedding <=> ${vecLiteral}) AS sem_score,
                   0::float AS kw_bonus,
-                  (CASE WHEN source LIKE 'CODE Brain:%' OR source LIKE '%Knowledge%' OR source LIKE '%Core%' OR source LIKE '%CONSTITUTION%' OR source LIKE '%CHRONOLOGY%' OR content LIKE '# %' THEN 0.15 ELSE 0 END)::float AS quality_boost
+                  (CASE 
+                    WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') AND content ILIKE '%СОДЕРЖАНИЕ%' THEN 0.65
+                    WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') THEN 0.35
+                    WHEN speaker ILIKE '%Genesis_Protocol_Part_%' AND content ILIKE '%СОДЕРЖАНИЕ%' THEN 0.50
+                    WHEN speaker ILIKE '%Genesis_Protocol_Part_%' THEN 0.20
+                    WHEN speaker ILIKE '%Grok%' OR speaker ILIKE '%Диалог%' OR speaker ILIKE '%chat%' OR speaker ILIKE '%Haiku%' OR speaker ILIKE '%МЕТОДИЧКА%' THEN -0.25
+                    WHEN speaker ILIKE '%CONSTITUTION%' OR speaker ILIKE '%CHRONOLOGY%' OR speaker ILIKE '%Genesis%' OR speaker ILIKE '%Book%' OR speaker ILIKE '%PADAM%' OR speaker ILIKE '%koan%' OR speaker ILIKE '%TechSpec%' OR speaker ILIKE '%architecture%' OR content ILIKE '%# %' OR content ILIKE '%## %' THEN 0.15 
+                    ELSE 0 
+                  END)::float AS quality_boost
            FROM chat_memory
            WHERE user_key = '__brain__' AND embedding IS NOT NULL
            ORDER BY embedding <=> ${vecLiteral}
            LIMIT ${k * 3})
           UNION ALL
-          (SELECT id, content, source,
+          (SELECT id, content, source, speaker,
                   1 - (embedding <=> ${vecLiteral}) AS sem_score,
                   0.25::float AS kw_bonus,
-                  (CASE WHEN source LIKE 'CODE Brain:%' OR source LIKE '%Knowledge%' OR source LIKE '%Core%' OR source LIKE '%CONSTITUTION%' OR source LIKE '%CHRONOLOGY%' OR content LIKE '# %' THEN 0.15 ELSE 0 END)::float AS quality_boost
+                  (CASE 
+                    WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') AND content ILIKE '%СОДЕРЖАНИЕ%' THEN 0.65
+                    WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') THEN 0.35
+                    WHEN speaker ILIKE '%Genesis_Protocol_Part_%' AND content ILIKE '%СОДЕРЖАНИЕ%' THEN 0.50
+                    WHEN speaker ILIKE '%Genesis_Protocol_Part_%' THEN 0.20
+                    WHEN speaker ILIKE '%Grok%' OR speaker ILIKE '%Диалог%' OR speaker ILIKE '%chat%' OR speaker ILIKE '%Haiku%' OR speaker ILIKE '%МЕТОДИЧКА%' THEN -0.25
+                    WHEN speaker ILIKE '%CONSTITUTION%' OR speaker ILIKE '%CHRONOLOGY%' OR speaker ILIKE '%Genesis%' OR speaker ILIKE '%Book%' OR speaker ILIKE '%PADAM%' OR speaker ILIKE '%koan%' OR speaker ILIKE '%TechSpec%' OR speaker ILIKE '%architecture%' OR content ILIKE '%# %' OR content ILIKE '%## %' THEN 0.15 
+                    ELSE 0 
+                  END)::float AS quality_boost
            FROM chat_memory
            WHERE user_key = '__brain__' AND embedding IS NOT NULL AND (${keywordFilter})
-           ORDER BY (CASE WHEN content LIKE '# %' OR content LIKE '## %' OR content LIKE '%---%' THEN 0 ELSE 1 END), length(content) ASC
+           ORDER BY 
+             (CASE WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') AND content ILIKE '%СОДЕРЖАНИЕ%' THEN 0 ELSE 1 END),
+             (CASE WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') THEN 0 ELSE 1 END),
+             (CASE WHEN speaker ILIKE '%Genesis%' OR speaker ILIKE '%Book%' OR speaker ILIKE '%PADAM%' OR speaker ILIKE '%CONSTITUTION%' OR speaker ILIKE '%CHRONOLOGY%' THEN 0 ELSE 1 END), 
+             (CASE WHEN content ILIKE '%# %' OR content ILIKE '%## %' THEN 0 ELSE 1 END), 
+             id DESC
            LIMIT ${k * 5})
         ),
         deduped AS (
-          SELECT id, content, source, MAX(sem_score + kw_bonus + quality_boost) as score
+          SELECT id, content, source, speaker, MAX(sem_score + kw_bonus + quality_boost) as score
           FROM candidates
-          GROUP BY id, content, source
+          GROUP BY id, content, source, speaker
         )
-        SELECT id, content, source, score
+        SELECT id, content, source, speaker, score
         FROM deduped
         ORDER BY score DESC
         LIMIT ${k}
@@ -161,8 +192,16 @@ export async function searchBrain(query: string, k = 12): Promise<KbChunk[]> {
       res = await pool.query(sql, params);
     } else {
       const sql = `
-        SELECT id, content, source,
-               (1 - (embedding <=> ${vecLiteral})) + (CASE WHEN source LIKE 'CODE Brain:%' OR source LIKE '%Knowledge%' OR source LIKE '%Core%' OR source LIKE '%CONSTITUTION%' OR source LIKE '%CHRONOLOGY%' OR content LIKE '# %' THEN 0.15 ELSE 0 END) AS score
+        SELECT id, content, source, speaker,
+               (1 - (embedding <=> ${vecLiteral})) + (CASE 
+                 WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') AND content ILIKE '%СОДЕРЖАНИЕ%' THEN 0.65
+                 WHEN (speaker ILIKE '%book_ru%' OR speaker ILIKE '%PADAM_Protocol_Part_%') THEN 0.35
+                 WHEN speaker ILIKE '%Genesis_Protocol_Part_%' AND content ILIKE '%СОДЕРЖАНИЕ%' THEN 0.50
+                 WHEN speaker ILIKE '%Genesis_Protocol_Part_%' THEN 0.20
+                 WHEN speaker ILIKE '%Grok%' OR speaker ILIKE '%Диалог%' OR speaker ILIKE '%chat%' OR speaker ILIKE '%Haiku%' OR speaker ILIKE '%МЕТОДИЧКА%' THEN -0.25
+                 WHEN speaker ILIKE '%CONSTITUTION%' OR speaker ILIKE '%CHRONOLOGY%' OR speaker ILIKE '%Genesis%' OR speaker ILIKE '%Book%' OR speaker ILIKE '%PADAM%' OR speaker ILIKE '%koan%' OR speaker ILIKE '%TechSpec%' OR speaker ILIKE '%architecture%' OR content ILIKE '%# %' OR content ILIKE '%## %' THEN 0.15 
+                 ELSE 0 
+               END) AS score
         FROM chat_memory
         WHERE user_key = '__brain__' AND embedding IS NOT NULL
         ORDER BY (1 - (embedding <=> ${vecLiteral})) DESC
@@ -172,14 +211,19 @@ export async function searchBrain(query: string, k = 12): Promise<KbChunk[]> {
     }
 
     return res.rows.map((r) => {
-      let src = r.source || "";
+      let src = r.source || r.speaker || "";
+      if (src && !src.startsWith("CODE Brain:") && !src.startsWith("Ковчег")) {
+        if (src.includes("/") || src.endsWith(".md") || src.endsWith(".docx") || src.endsWith(".pdf") || src.endsWith(".txt")) {
+          src = "CODE Brain: " + src;
+        }
+      }
       if (!src && r.content) {
         const match = r.content.match(/^---\s*[\r\n]+source:\s*([^\r\n]+)/m) || r.content.match(/^#\s+([^\r\n]+)/m);
         if (match) {
-          src = match[1].trim();
+          src = "CODE Brain: " + match[1].trim();
         } else {
           const firstLine = r.content.split(/[\r\n]+/).find((l: string) => l.trim().length > 5);
-          src = firstLine ? firstLine.slice(0, 50).trim() + "..." : "CODE Brain Archive";
+          src = firstLine ? "CODE Brain: " + firstLine.slice(0, 50).trim() + "..." : "CODE Brain Archive";
         }
       }
       return {
